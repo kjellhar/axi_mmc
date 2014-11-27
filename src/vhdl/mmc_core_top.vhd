@@ -106,7 +106,9 @@ architecture rtl of mmc_core_top is
     type state_t is (
         INACTIVE,
         IDLE,
-        SEND_CMD);
+        SEND_CMD,
+        WAIT_FOR_R1B,
+        WAIT_FOR_RX);
         
     -- Response encoding
     constant RESP_NONE  : std_logic_vector(2 downto 0)  := "000";
@@ -128,6 +130,7 @@ architecture rtl of mmc_core_top is
     
     -- Internal control signals
     signal response : std_logic_vector (2 downto 0);
+    signal send_cmd_finished : std_logic := '0';
 
 
     -- Register
