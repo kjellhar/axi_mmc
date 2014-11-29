@@ -25,6 +25,7 @@
 --              [31:24] - MMC clock prescaler:  f_mmc = f_in/(2*(1+pre))
 --
 --          operation_reg (RW):
+--              [22:16] - Cmd CRC7 (used if bit 9 is 0)
 --              [12]    - Read/Write multiple sectors
 --              [11]    - Write data
 --              [10]    - Read data
@@ -106,9 +107,11 @@ architecture rtl of mmc_core_top is
     type state_t is (
         INACTIVE,
         IDLE,
+        INIT_SEND_CMD,
+        START_SEND_CMD,
         SEND_CMD,
-        WAIT_FOR_R1B,
-        WAIT_FOR_RX);
+        START_RESP,
+        WAIT_FOR_RESP);
         
     -- Response encoding
     constant RESP_NONE  : std_logic_vector(2 downto 0)  := "000";
@@ -130,7 +133,12 @@ architecture rtl of mmc_core_top is
     
     -- Internal control signals
     signal response : std_logic_vector (2 downto 0);
-    signal send_cmd_finished : std_logic := '0';
+    signal cmd_index : std_logic_vector (5 downto 0);
+    signal crc7_preset : std_logic_vector (6 downto 0);
+    signal send_cmd_busy : std_logic := '0';
+    signal send_cmd_trigger : std_logic := '0';
+    signal receive_cmd_busy : std_logic := '0';
+    signal receive_cmd_trigger : std_logic := '0';
 
 
     -- Register
@@ -143,11 +151,11 @@ architecture rtl of mmc_core_top is
     
     
     -- Internal MMC signals
-    signal mmc_clk : std_logic := '0';
+    signal mmc_clk : std_logic := '0';   
     
     -- Shift register
-    signal cmd_shift_in : std_logic_vector (7 downto 0);
-    signal cmd_shift_out : std_logic_vector (7 downto 0);
+    signal cmd_shift_in : std_logic_vector (135 downto 0);
+    signal cmd_shift_out : std_logic_vector (47 downto 0);
     signal dat0_shift_in : std_logic_vector (7 downto 0);
     signal dat0_shift_out : std_logic_vector (7 downto 0);
     signal dat1_shift_in : std_logic_vector (7 downto 0);
@@ -176,9 +184,12 @@ begin
     respons_fifo_o <= respons_fifo;
     rdata_fifo_o <= rdata_fifo;
     mmc_clk_o <= mmc_clk;
+    mmc_cmd_o <= cmd_shift_out (47);
 
     -- Connect config register to control signals
-    response <= operation_reg(8 downto 6);
+    cmd_index <= operation_reg (5 downto 0);
+    response <= operation_reg (8 downto 6);
+    crc7_preset <= operation_reg (22 downto 16);
     
     -- Register block
     process
@@ -208,18 +219,21 @@ begin
         wait until rising_edge(clk);
         
         if reset='1' then
-            state <= IDLE;
+            state <= INACTIVE;
         else
             state <= nextstate;
         end if;
     end process;
     
     -- State machine logic
-    process
+    process (state, execute, send_cmd_busy, response, receive_cmd_busy)
     begin
         -- default values for outputs
         nextstate <= state;
         mmc_clk_en <= '1';
+        send_cmd_trigger <= '0';
+        receive_cmd_trigger <= '0';
+        mmc_cmd_dir <= '0';     -- Default to input
         
         -- Next state and output logic
         case state is
@@ -232,24 +246,43 @@ begin
         
             when IDLE =>
                 if execute='1' then
-                    nextstate <= SEND_CMD;
+                    nextstate <= INIT_SEND_CMD;
                 end if;
-            
+                
+            when INIT_SEND_CMD =>
+                if send_cmd_busy='0' then
+                    nextstate <= START_SEND_CMD;
+                end if;
+                
+            when START_SEND_CMD =>
+                send_cmd_trigger <= '1';
+                mmc_cmd_dir <= '1';
+                if send_cmd_busy='1' then
+                    nextstate <= SEND_CMD;
+                end if;                
+
             when SEND_CMD =>
-                if send_cmd_finished='1' then
-                    if response=RESP_R1B then
-                        nextstate <= WAIT_FOR_R1B;
-                    elsif response=RESP_NONE then
+                mmc_cmd_dir <= '1';
+                if send_cmd_busy='0' then
+                    if response=RESP_NONE then
                         nextstate <= IDLE;
                     else
-                        nextstate <= WAIT_FOR_RX;
+                        nextstate <= START_RESP;
                     end if;
                 end if;
             
-            when WAIT_FOR_RX =>
-            
-            when WAIT_FOR_R1B =>
-            
+            when START_RESP =>
+                receive_cmd_trigger <= '1';
+                
+                if receive_cmd_busy='1' then            
+                    nextstate <= WAIT_FOR_RESP;
+                end if;
+                
+            when WAIT_FOR_RESP =>
+                if receive_cmd_busy='0' then
+                    nextstate <= IDLE;
+                end if;
+                        
 --            when GET_R1 =>
             
 --            when GET_R1B =>
@@ -279,14 +312,8 @@ begin
         
     begin
         wait until rising_edge(clk);
-        
-        if reset='1' then
-            mmc_clk <= '0';
-            pre_counter := 0;
-            mmc_clk_rise <= '0';
-            mmc_clk_fall <= '0';
-            
-        elsif mmc_clk_en='1' then
+
+        if mmc_clk_en='1' then
             mmc_clk_rise <= '0';
             mmc_clk_fall <= '0';
             
@@ -306,6 +333,64 @@ begin
                 
             end if;
         end if;       
+    end process;
+
+    --MMC CMD out 
+    process
+        variable bit_counter : integer range 0 to 47 := 0;
+    begin
+        wait until rising_edge(clk);
+        
+        if reset='1' then
+            bit_counter := 0;
+            cmd_shift_out <= (others => '1');
+        
+        elsif mmc_clk_rise='1' then
+            if send_cmd_trigger='1' then
+                cmd_shift_out <= "01" & cmd_index & cmd_arg_reg & crc7_preset & '1';
+                bit_counter := 47;
+                send_cmd_busy <= '1';       
+        
+            else
+                cmd_shift_out <= cmd_shift_out (46 downto 0) & '1';
+                
+                if bit_counter = 0 then                
+                    send_cmd_busy <= '0';
+                
+                else 
+                    bit_counter := bit_counter - 1;
+                    send_cmd_busy <= '1';
+                end if;
+            end if;
+        end if;
+        
+    end process;
+
+    -- MMC CMD in
+    process
+    begin
+        wait until rising_edge(clk);
+        
+        if reset='1' then
+            receive_cmd_busy <= '0';
+            
+        elsif mmc_clk_rise='1' then
+            if receive_cmd_trigger='1' then
+                receive_cmd_busy <= '1';
+                cmd_shift_in <= (others => '1');
+            
+            elsif receive_cmd_busy='1' then
+                cmd_shift_in <= cmd_shift_in (134 downto 0) & mmc_cmd_i;
+                
+                if response=RESP_R2 and cmd_shift_in(134)='0' then
+                    receive_cmd_busy <= '0';
+
+                elsif response/=RESP_R2 and cmd_shift_in(46)='0' then
+                        receive_cmd_busy <= '0';
+ 
+                end if;
+            end if;                
+        end if;      
     end process;
 
 
