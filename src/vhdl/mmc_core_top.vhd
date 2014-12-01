@@ -23,6 +23,8 @@
 --
 --          config_reg (RW):
 --              [31:24] - MMC clock prescaler:  f_mmc = f_in/(2*(1+pre))
+--              [0]     - Module enable  
+--
 --
 --          operation_reg (RW):
 --              [22:16] - Cmd CRC7 (used if bit 9 is 0)
@@ -167,6 +169,7 @@ architecture rtl of mmc_core_top is
     signal receive_cmd_trigger : std_logic := '0';
     signal cmd_shift_outval : std_logic_vector (47 downto 0);
     signal prescaler : std_logic_vector (7 downto 0);
+    signal module_enable : std_logic;
 
 
     -- Register
@@ -218,6 +221,7 @@ begin
     response <= operation_reg (8 downto 6);
     crc7_preset <= operation_reg (22 downto 16);
     prescaler <= config_reg (31 downto 24);
+    module_enable <= config_reg(0);
     
     cmd_shift_outval <= "01" & cmd_index & cmd_arg_reg & crc7_preset & '1';
     
@@ -248,7 +252,7 @@ begin
     begin
         wait until rising_edge(clk);
         
-        if reset='1' then
+        if reset='1' or module_enable='0' then
             state <= INACTIVE;
         else
             state <= nextstate;
@@ -268,10 +272,9 @@ begin
         -- Next state and output logic
         case state is
             when INACTIVE =>
-                if execute='1' then
+                if module_enable='1' then
                     nextstate <= IDLE;
                 end if;
-                
                 mmc_clk_en <= '0';
         
             when IDLE =>
