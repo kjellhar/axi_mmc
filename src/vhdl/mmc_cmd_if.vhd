@@ -161,8 +161,10 @@ begin
                 
                 if response_i=RESP_R2  then
                     receive_bit_counter <= 135;
+                    receive_cmd_crc <='0';
                 else
                     receive_bit_counter <= 47;
+                    receive_cmd_crc <='1';
                 end if;
                 
             elsif receive_wait_start='1' then
@@ -170,8 +172,21 @@ begin
                     receive_bit_counter <= receive_bit_counter - 1;
                     cmd_shift_in <= cmd_shift_in (134 downto 0) & mmc_cmd_i;
                     receive_wait_start <= '0';
+                    receive_reset_crc <= '0';                                    
+                else
+                    receive_reset_crc <= '1';                   
                 end if;
                 
+            elsif receive_bit_counter=128 then
+                receive_cmd_crc <='1';
+                receive_bit_counter <= receive_bit_counter - 1;
+                cmd_shift_in <= cmd_shift_in (134 downto 0) & mmc_cmd_i;
+                
+            elsif receive_bit_counter=8 then
+                receive_cmd_crc <='0';
+                receive_bit_counter <= receive_bit_counter - 1;
+                cmd_shift_in <= cmd_shift_in (134 downto 0) & mmc_cmd_i;
+                                
             elsif receive_bit_counter=0 then
                 if receive_cmd_busy='1' then
                     cmd_shift_in <= cmd_shift_in (134 downto 0) & mmc_cmd_i;
