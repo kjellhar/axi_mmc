@@ -125,6 +125,16 @@ architecture rtl of mmc_core_top is
                
                );
     end component;
+    
+    component mmc_clk_manager is
+        Port ( clk : in std_logic;
+               clk_en : in std_logic;
+               reset : in std_logic;
+               prescaler : in std_logic_vector (7 downto 0);
+               mmc_clk : out std_logic;
+               mmc_clk_rise : out std_logic;
+               mmc_clk_fall : out std_logic);
+    end component;    
 
 
     -- State variables
@@ -143,9 +153,9 @@ architecture rtl of mmc_core_top is
 
 
     -- Clock Enable signals
-    signal mmc_clk_en : std_logic := '0';
-    signal mmc_clk_fall : std_logic := '0';
-    signal mmc_clk_rise : std_logic := '0';
+    signal mmc_clk_en : std_logic;
+    signal mmc_clk_fall : std_logic;
+    signal mmc_clk_rise : std_logic;
     
     -- Internal control signals
     signal response : std_logic_vector (2 downto 0);
@@ -155,6 +165,8 @@ architecture rtl of mmc_core_top is
     signal send_cmd_trigger : std_logic := '0';
     signal receive_cmd_busy : std_logic := '0';
     signal receive_cmd_trigger : std_logic := '0';
+    signal cmd_shift_outval : std_logic_vector (47 downto 0);
+    signal prescaler : std_logic_vector (7 downto 0);
 
 
     -- Register
@@ -205,6 +217,9 @@ begin
     cmd_index <= operation_reg (5 downto 0);
     response <= operation_reg (8 downto 6);
     crc7_preset <= operation_reg (22 downto 16);
+    prescaler <= config_reg (31 downto 24);
+    
+    cmd_shift_outval <= "01" & cmd_index & cmd_arg_reg & crc7_preset & '1';
     
     -- Register block
     process
@@ -321,35 +336,17 @@ begin
     end process;
 
 
-    -- MMC clock manager
-    process
-        variable pre_counter : integer range 0 to 2**8-1 := 0;
-        
-    begin
-        wait until rising_edge(clk);
 
-        if mmc_clk_en='1' then
-            mmc_clk_rise <= '0';
-            mmc_clk_fall <= '0';
-            
-            if pre_counter=0 then
-                pre_counter := TO_INTEGER(unsigned(config_reg (31 downto 24)));
-                
-                if mmc_clk='0' then
-                    mmc_clk <= '1';
-                    mmc_clk_rise <= '1';
-                else
-                    mmc_clk <= '0';
-                    mmc_clk_fall <= '1';
-                end if;
-                
-            else
-                pre_counter := pre_counter - 1;
-                
-            end if;
-        end if;       
-    end process;
-
+    u_mmc_clk_manager : mmc_clk_manager 
+        Port map ( 
+        clk => clk,
+        clk_en => mmc_clk_en,
+        reset => reset,
+        prescaler => prescaler,
+        mmc_clk => mmc_clk,
+        mmc_clk_rise => mmc_clk_rise,
+        mmc_clk_fall => mmc_clk_fall
+        );
 
     u_mmc_cmd_if : mmc_cmd_if 
         Port map ( 
@@ -367,7 +364,7 @@ begin
             
             response => response,
             
-            cmd_shift_outval => "01" & cmd_index & cmd_arg_reg & crc7_preset & '1',
+            cmd_shift_outval => cmd_shift_outval,
             cmd_shift_inval => cmd_shift_in          
             );
 

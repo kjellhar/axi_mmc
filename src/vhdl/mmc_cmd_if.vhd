@@ -4,7 +4,7 @@
 -- 
 -- Create Date: 12/01/2014 09:11:16 AM
 -- Design Name: 
--- Module Name: mmc_cmd_if - Behavioral
+-- Module Name: mmc_cmd_if - rtl
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
@@ -53,10 +53,10 @@ entity mmc_cmd_if is
            );
 end mmc_cmd_if;
 
-architecture Behavioral of mmc_cmd_if is
+architecture rtl of mmc_cmd_if is
 
-    signal cmd_shift_out : std_logic_vector (47 downto 0);
-    signal cmd_shift_in : std_logic_vector (135 downto 0);
+    signal cmd_shift_out : std_logic_vector (47 downto 0) := (others => '1');
+    signal cmd_shift_in : std_logic_vector (135 downto 0) := (others => '1');
     
     signal receive_cmd_busy_i : std_logic := '0';
     
@@ -74,7 +74,6 @@ begin
         
         if reset='1' then
             bit_counter := 0;
-            cmd_shift_out <= (others => '1');
         
         elsif clk_en='1' then
             if send_cmd_trigger='1' then
@@ -126,4 +125,4 @@ begin
 
 
 
-end Behavioral;
+end rtl;
