@@ -30,13 +30,13 @@ add_files -fileset constrs_1 [glob $constrDir/*.xdc]
 
 # Create simulation sets and add source code
 set re {[^\/]*$}
-
 foreach dirName [glob -nocomplain -type {d r} -path $simDir/ *] {
-	regexp $re $dirName fileSet
+	regexp $re $dirName simName
+	set fileSet "sim_$simName"
 	create_fileset -simset $fileSet
 	current_fileset -simset $fileSet
 	add_files [glob $dirName/*.vhd] -fileset $fileSet
 	add_files [glob $vhdlDir/*.vhd] -fileset $fileSet
+	set_property top $simName [get_filesets $fileSet]
 }
 
-delete_fileset sim_1
