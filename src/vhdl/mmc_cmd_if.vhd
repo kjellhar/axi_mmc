@@ -40,15 +40,15 @@ entity mmc_cmd_if is
            mmc_cmd_i : in std_logic;
            mmc_cmd_o : out std_logic;
            
-           send_cmd_trigger : in std_logic;
-           receive_cmd_trigger : in std_logic;
-           send_cmd_busy : out std_logic;
-           receive_cmd_busy : out std_logic;
+           send_cmd_trigger_i : in std_logic;
+           receive_cmd_trigger_i : in std_logic;
+           send_cmd_busy_o : out std_logic;
+           receive_cmd_busy_o : out std_logic;
            
-           response : in std_logic_vector (2 downto 0);
+           response_i : in std_logic_vector (2 downto 0);
            
-           cmd_shift_outval : in std_logic_vector (47 downto 0);
-           cmd_shift_inval : out std_logic_vector (135 downto 0)
+           cmd_shift_outval_i : in std_logic_vector (47 downto 0);
+           cmd_shift_inval_o : out std_logic_vector (135 downto 0)
            
            );
 end mmc_cmd_if;
@@ -58,12 +58,12 @@ architecture rtl of mmc_cmd_if is
     signal cmd_shift_out : std_logic_vector (47 downto 0) := (others => '1');
     signal cmd_shift_in : std_logic_vector (135 downto 0) := (others => '1');
     
-    signal receive_cmd_busy_i : std_logic := '0';
+    signal receive_cmd_busy : std_logic := '0';
     
 begin
 
-    cmd_shift_inval <= cmd_shift_in;
-    receive_cmd_busy <= receive_cmd_busy_i;
+    cmd_shift_inval_o <= cmd_shift_in;
+    receive_cmd_busy_o <= receive_cmd_busy;
     mmc_cmd_o <= cmd_shift_out (47);
 
     --MMC CMD out 
@@ -76,20 +76,20 @@ begin
             bit_counter := 0;
         
         elsif clk_en='1' then
-            if send_cmd_trigger='1' then
-                cmd_shift_out <= cmd_shift_outval;
+            if send_cmd_trigger_i='1' then
+                cmd_shift_out <= cmd_shift_outval_i;
                 bit_counter := 47;
-                send_cmd_busy <= '1';       
+                send_cmd_busy_o <= '1';       
         
             else
                 cmd_shift_out <= cmd_shift_out (46 downto 0) & '1';
                 
                 if bit_counter = 0 then                
-                    send_cmd_busy <= '0';
+                    send_cmd_busy_o <= '0';
                 
                 else 
                     bit_counter := bit_counter - 1;
-                    send_cmd_busy <= '1';
+                    send_cmd_busy_o <= '1';
                 end if;
             end if;
         end if;
@@ -102,21 +102,21 @@ begin
         wait until rising_edge(clk);
         
         if reset='1' then
-            receive_cmd_busy_i <= '0';
+            receive_cmd_busy <= '0';
             
         elsif clk_en='1' then
-            if receive_cmd_trigger='1' then
-                receive_cmd_busy_i <= '1';
+            if receive_cmd_trigger_i='1' then
+                receive_cmd_busy <= '1';
                 cmd_shift_in <= (others => '1');
             
-            elsif receive_cmd_busy_i='1' then
+            elsif receive_cmd_busy='1' then
                 cmd_shift_in <= cmd_shift_in (134 downto 0) & mmc_cmd_i;
                 
-                if response=RESP_R2 and cmd_shift_in(134)='0' then
-                    receive_cmd_busy_i <= '0';
+                if response_i=RESP_R2 and cmd_shift_in(134)='0' then
+                    receive_cmd_busy <= '0';
 
-                elsif response/=RESP_R2 and cmd_shift_in(46)='0' then
-                        receive_cmd_busy_i <= '0';
+                elsif response_i/=RESP_R2 and cmd_shift_in(46)='0' then
+                        receive_cmd_busy <= '0';
  
                 end if;
             end if;                

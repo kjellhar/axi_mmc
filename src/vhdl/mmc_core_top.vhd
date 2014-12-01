@@ -113,15 +113,15 @@ architecture rtl of mmc_core_top is
                mmc_cmd_i : in std_logic;
                mmc_cmd_o : out std_logic;
                
-               send_cmd_trigger : in std_logic;
-               receive_cmd_trigger : in std_logic;
-               send_cmd_busy : out std_logic;
-               receive_cmd_busy : out std_logic;
+               send_cmd_trigger_i : in std_logic;
+               receive_cmd_trigger_i : in std_logic;
+               send_cmd_busy_o : out std_logic;
+               receive_cmd_busy_o : out std_logic;
                
-               response : in std_logic_vector (2 downto 0);
+               response_i : in std_logic_vector (2 downto 0);
                
-               cmd_shift_outval : in std_logic_vector (47 downto 0);
-               cmd_shift_inval : out std_logic_vector (135 downto 0)
+               cmd_shift_outval_i : in std_logic_vector (47 downto 0);
+               cmd_shift_inval_o : out std_logic_vector (135 downto 0)
                
                );
     end component;
@@ -357,15 +357,15 @@ begin
             mmc_cmd_i => mmc_cmd_i,
             mmc_cmd_o => mmc_cmd_o,
             
-            send_cmd_trigger => send_cmd_trigger,
-            receive_cmd_trigger => receive_cmd_trigger,
-            send_cmd_busy => send_cmd_busy,
-            receive_cmd_busy => receive_cmd_busy,
+            send_cmd_trigger_i => send_cmd_trigger,
+            receive_cmd_trigger_i => receive_cmd_trigger,
+            send_cmd_busy_o => send_cmd_busy,
+            receive_cmd_busy_o => receive_cmd_busy,
             
-            response => response,
+            response_i => response,
             
-            cmd_shift_outval => cmd_shift_outval,
-            cmd_shift_inval => cmd_shift_in          
+            cmd_shift_outval_i => cmd_shift_outval,
+            cmd_shift_inval_o => cmd_shift_in          
             );
 
 
