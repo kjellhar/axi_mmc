@@ -33,9 +33,10 @@ set re {[^\/]*$}
 
 foreach dirName [glob -nocomplain -type {d r} -path $simDir/ *] {
 	regexp $re $dirName fileSet
-	puts $fileSet
-	create_fileset -simset $fileset
-	current_fileset -simset $fileset
-	add_files [glob $dirName/*.vhd] -fileset $fileset
-	add_files [glob $vhdlDir/*.vhd] -fileset $fileset
+	create_fileset -simset $fileSet
+	current_fileset -simset $fileSet
+	add_files [glob $dirName/*.vhd] -fileset $fileSet
+	add_files [glob $vhdlDir/*.vhd] -fileset $fileSet
 }
+
+delete_fileset sim_1
