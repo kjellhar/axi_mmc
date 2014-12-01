@@ -33,6 +33,7 @@ use IEEE.STD_LOGIC_1164.ALL;
 
 entity mmc_crc7 is
     Port ( clk : in std_logic;
+           clk_en : in std_logic;
            reset : in std_logic;
            enable : in std_logic;
            
@@ -45,15 +46,17 @@ architecture rtl of mmc_crc7 is
     signal crc_reg : std_logic_vector (6 downto 0) := (others => '0');
 
 begin
+
+    crc7_out <= crc_reg;
  
-    process (clk)
+    process
     begin
         wait until rising_edge(clk);
         
         if reset='1' then
             crc_reg <= (others => '0');
         
-        elsif enable='1' then
+        elsif enable='1' and clk_en='1' then
             crc_reg(0) <= crc_reg(6) xor serial_in;
             crc_reg(1) <= crc_reg(0);
             crc_reg(2) <= crc_reg(1);

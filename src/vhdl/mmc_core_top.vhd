@@ -123,8 +123,8 @@ architecture rtl of mmc_core_top is
                response_i : in std_logic_vector (2 downto 0);
                
                cmd_shift_outval_i : in std_logic_vector (47 downto 0);
-               cmd_shift_inval_o : out std_logic_vector (135 downto 0)
-               
+               cmd_shift_inval_o : out std_logic_vector (135 downto 0);
+               mmc_crc7_out_o : out std_logic_vector (6 downto 0)
                );
     end component;
     
@@ -170,6 +170,7 @@ architecture rtl of mmc_core_top is
     signal cmd_shift_outval : std_logic_vector (47 downto 0);
     signal prescaler : std_logic_vector (7 downto 0);
     signal module_enable : std_logic;
+    signal mmc_crc7_out : std_logic_vector (6 downto 0);
 
 
     -- Register
@@ -368,7 +369,8 @@ begin
             response_i => response,
             
             cmd_shift_outval_i => cmd_shift_outval,
-            cmd_shift_inval_o => cmd_shift_in          
+            cmd_shift_inval_o => cmd_shift_in,
+            mmc_crc7_out_o => mmc_crc7_out        
             );
 
 

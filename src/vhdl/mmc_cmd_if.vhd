@@ -48,23 +48,44 @@ entity mmc_cmd_if is
            response_i : in std_logic_vector (2 downto 0);
            
            cmd_shift_outval_i : in std_logic_vector (47 downto 0);
-           cmd_shift_inval_o : out std_logic_vector (135 downto 0)
+           cmd_shift_inval_o : out std_logic_vector (135 downto 0);
            
+           mmc_crc7_out_o : out std_logic_vector (6 downto 0)
            );
 end mmc_cmd_if;
 
 architecture rtl of mmc_cmd_if is
+    component mmc_crc7 is
+        Port ( clk : in std_logic;
+               clk_en : in std_logic;
+               reset : in std_logic;
+               enable : in std_logic;
+               
+               serial_in : in std_logic;
+               crc7_out : out std_logic_vector (6 downto 0)
+               );
+    end component;
+
+
 
     signal cmd_shift_out : std_logic_vector (47 downto 0) := (others => '1');
     signal cmd_shift_in : std_logic_vector (135 downto 0) := (others => '1');
     
+    signal send_cmd_busy : std_logic := '0';
     signal receive_cmd_busy : std_logic := '0';
+        
+    signal crc7_en : std_logic := '0';
+    signal crc7_source : std_logic;
+    signal crc7_out : std_logic_vector (6 downto 0);
     
 begin
 
     cmd_shift_inval_o <= cmd_shift_in;
     receive_cmd_busy_o <= receive_cmd_busy;
+    send_cmd_busy_o <= send_cmd_busy;
     mmc_cmd_o <= cmd_shift_out (47);
+    mmc_crc7_out_o <= crc7_out;
+    
 
     --MMC CMD out 
     process
@@ -76,20 +97,20 @@ begin
             bit_counter := 0;
         
         elsif clk_en='1' then
-            if send_cmd_trigger_i='1' then
+            if send_cmd_trigger_i='1' and receive_cmd_busy='0' then
                 cmd_shift_out <= cmd_shift_outval_i;
                 bit_counter := 47;
-                send_cmd_busy_o <= '1';       
+                send_cmd_busy <= '1';       
         
             else
                 cmd_shift_out <= cmd_shift_out (46 downto 0) & '1';
                 
                 if bit_counter = 0 then                
-                    send_cmd_busy_o <= '0';
+                    send_cmd_busy <= '0';
                 
                 else 
                     bit_counter := bit_counter - 1;
-                    send_cmd_busy_o <= '1';
+                    send_cmd_busy <= '1';
                 end if;
             end if;
         end if;
@@ -105,7 +126,7 @@ begin
             receive_cmd_busy <= '0';
             
         elsif clk_en='1' then
-            if receive_cmd_trigger_i='1' then
+            if receive_cmd_trigger_i='1' and send_cmd_busy='0' then
                 receive_cmd_busy <= '1';
                 cmd_shift_in <= (others => '1');
             
@@ -122,7 +143,26 @@ begin
             end if;                
         end if;      
     end process;
+    
+    crc7_source <= cmd_shift_out (47) when send_cmd_busy='1' else
+                   mmc_cmd_i when receive_cmd_busy='1' else
+                   '0';
+                   
+    crc7_en <= '1' when send_cmd_busy='1' else
+               '1' when receive_cmd_busy='1' else
+               '0';
+               
+               
 
-
+    u_mmc_crc7 : mmc_crc7
+        Port map ( 
+            clk => clk,
+            clk_en => clk_en,
+            reset => reset,
+            enable => crc7_en,
+            
+            serial_in => crc7_source,
+            crc7_out => crc7_out
+            );
 
 end rtl;
