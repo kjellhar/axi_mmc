@@ -120,6 +120,8 @@ architecture rtl of mmc_core_top is
                send_cmd_busy_o : out std_logic;
                receive_cmd_busy_o : out std_logic;
                
+               crc7_calc_en_i : in std_logic;
+               
                response_i : in std_logic_vector (2 downto 0);
                
                cmd_shift_outval_i : in std_logic_vector (47 downto 0);
@@ -171,6 +173,7 @@ architecture rtl of mmc_core_top is
     signal prescaler : std_logic_vector (7 downto 0);
     signal module_enable : std_logic;
     signal mmc_crc7_out : std_logic_vector (6 downto 0);
+    signal crc7_calc_en : std_logic;
 
 
     -- Register
@@ -223,6 +226,7 @@ begin
     crc7_preset <= operation_reg (22 downto 16);
     prescaler <= config_reg (31 downto 24);
     module_enable <= config_reg(0);
+    crc7_calc_en <= config_reg(9);
     
     cmd_shift_outval <= "01" & cmd_index & cmd_arg_reg & crc7_preset & '1';
     
@@ -365,6 +369,8 @@ begin
             receive_cmd_trigger_i => receive_cmd_trigger,
             send_cmd_busy_o => send_cmd_busy,
             receive_cmd_busy_o => receive_cmd_busy,
+            
+            crc7_calc_en_i => crc7_calc_en,
             
             response_i => response,
             

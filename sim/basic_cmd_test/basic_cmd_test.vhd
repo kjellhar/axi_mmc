@@ -175,7 +175,7 @@ begin
         wait until rising_edge(clk100M);
         
         
-        config_reg_i <= X"02" & X"000001";
+        config_reg_i <= X"02" & X"000201";
         wait until rising_edge(clk100M);
         config_reg_wr <= '1';
         wait until rising_edge(clk100M);

@@ -66,10 +66,8 @@ begin
                 pre_counter := TO_INTEGER(unsigned(prescaler));
                 
                 if mmc_clk_i='0' then
-                    mmc_clk_i <= '1';
                     mmc_clk_rise_i <= '1';
                 else
-                    mmc_clk_i <= '0';
                     mmc_clk_fall_i <= '1';
                 end if;
                 
@@ -77,6 +75,13 @@ begin
                 pre_counter := pre_counter - 1;
                 
             end if;
-        end if;       
+        end if;
+        
+        if mmc_clk_rise_i='1' then
+            mmc_clk_i <= '1';
+        elsif mmc_clk_fall_i='1' then
+            mmc_clk_i <='0';
+        end if;
+           
     end process;
 end rtl;
