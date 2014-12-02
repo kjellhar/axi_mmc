@@ -35,6 +35,11 @@ entity mmc_dataline is
     Port ( clk : in std_logic;
            reset : in std_logic;
            clk_en : in std_logic;
+           dat_dir : in std_logic;
+           load_shift : in std_logic;
+           shift_en : in std_logic;
+           crc16_clear : in std_logic;
+           crc16_en : in std_logic;
            txdata_i : in std_logic_vector (7 downto 0);
            rxdata_o : out std_logic_vector (7 downto 0);
            mmc_dat_i : in std_logic;
@@ -57,11 +62,14 @@ architecture rtl of mmc_dataline is
     signal bit_counter : integer range 0 to 7;
 
     signal shift_reg : std_logic_vector (7 downto 0) := (others => '1');
-    signal load_shift : std_logic := '0';
     signal shift_en : std_logic := '0';
-
+    
+    signal crc16 : std_logic_vector (15 downto 0);
+    signal crc16_serial_in : std_logic;
+    
 begin
 
+    crc16_serial_in <= mmc_dat_i when dat_dir='0' else shift_reg(7);
     
     -- Shift register
     mmc_dat_o <= shift_reg(7);
@@ -83,11 +91,11 @@ begin
         Port map ( 
             clk => clk,
             clk_en => clk_en,
-            reset => reset,
-            enable => ,
+            reset => crc16_clear,
+            enable => crc16_en,
             
-            serial_in => ,
-            crc16_out => 
+            serial_in => crc16_serial_in,
+            crc16_out => crc16
             );
 
 end rtl;
