@@ -186,27 +186,8 @@ architecture rtl of mmc_core_top is
     
     
     -- Internal MMC signals
-    signal mmc_clk : std_logic := '0';   
-    
+    signal mmc_clk : std_logic := '0';      
     signal cmd_shift_in : std_logic_vector (135 downto 0);
-
-
-    signal dat0_shift_in : std_logic_vector (7 downto 0);
-    signal dat0_shift_out : std_logic_vector (7 downto 0);
-    signal dat1_shift_in : std_logic_vector (7 downto 0);
-    signal dat1_shift_out : std_logic_vector (7 downto 0);
-    signal dat2_shift_in : std_logic_vector (7 downto 0);
-    signal dat2_shift_out : std_logic_vector (7 downto 0);
-    signal dat3_shift_in : std_logic_vector (7 downto 0);
-    signal dat3_shift_out : std_logic_vector (7 downto 0);
-    signal dat4_shift_in : std_logic_vector (7 downto 0);
-    signal dat4_shift_out : std_logic_vector (7 downto 0);
-    signal dat5_shift_in : std_logic_vector (7 downto 0);
-    signal dat5_shift_out : std_logic_vector (7 downto 0);
-    signal dat6_shift_in : std_logic_vector (7 downto 0);
-    signal dat6_shift_out : std_logic_vector (7 downto 0);
-    signal dat7_shift_in : std_logic_vector (7 downto 0);
-    signal dat7_shift_out : std_logic_vector (7 downto 0);
     
 
 begin
