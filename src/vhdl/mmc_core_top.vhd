@@ -301,27 +301,12 @@ begin
                 if receive_cmd_busy='0' then
                     nextstate <= IDLE;
                 end if;
-                        
---            when GET_R1 =>
-            
---            when GET_R1B =>
-            
---            when GET_R2 =>
-            
---            when GET_R3 =>
-            
---            when GET_R4 =>
-            
---            when GET_R5 =>
-            
+                
             when others =>
                 nextstate <= INACTIVE;
                 
-                -- Output error signal    
-            
+                -- Output error signal               
         end case;
-    
-    
     end process;
 
 
