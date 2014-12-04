@@ -34,59 +34,115 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity mmc_dat_if is
     Port ( clk : in std_logic;
            clk_en : in std_logic;
-           reset : in std_logic
+           mmc_clk_rise : in std_logic;
+           reset : in std_logic;
            
+           trigger_block_i : in std_logic;
+           block_finished_o : out std_logic;
+           
+           bus_width : in std_logic_vector (1 downto 0);
+           
+           data_fifo_out_i : in std_logic_vector (31 downto 0);
+           data_fifo_out_wr_i : in std_logic;
+           data_fifo_out_full_o : out std_logic;
+           
+           data_fifo_in_o : out std_logic_vector (31 downto 0);
+           data_fifo_in_rd_i : in std_logic;
+           data_fifo_in_empty_o : out std_logic;
+           
+           dat_out_o : out std_logic_vector (7 downto 0);
+           dat_in_i : in std_logic_vector (7 downto 0);
+           dat_dir_i : in std_logic_vector
            
            );
 end mmc_dat_if;
 
 architecture rtl of mmc_dat_if is
-    component mmc_dataline is
-        Port ( clk : in std_logic;
-               reset : in std_logic;
-               clk_en : in std_logic;
-               dat_dir : in std_logic;
-               load_shift : in std_logic;
-               shift_en : in std_logic;
-               crc16_clear : in std_logic;
-               crc16_en : in std_logic;
-               txdata_i : in std_logic_vector (7 downto 0);
-               rxdata_o : out std_logic_vector (7 downto 0);
-               mmc_dat_i : in std_logic;
-               mmc_dat_o : out std_logic);
-    end component;
+
+    COMPONENT mmc_dat_fifo
+        PORT (
+            clk : IN STD_LOGIC;
+            srst : IN STD_LOGIC;
+            din : IN STD_LOGIC_VECTOR(31 DOWNTO 0);
+            wr_en : IN STD_LOGIC;
+            rd_en : IN STD_LOGIC;
+            dout : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
+            full : OUT STD_LOGIC;
+            empty : OUT STD_LOGIC
+        );
+    END COMPONENT;
+
+    signal byte_counter : integer range 0 to 513 := 0;
+    signal bit_counter : integer range 0 to 7 := 7;
     
-    type bytearray is array (7 downto 0) of std_logic_vector (7 downto 0);
+    signal shift_en : std_logic := '0';
     
-    signal dat_dir : std_logic;
-    signal load_shift : std_logic;
-    signal crc16_clear : std_logic;
-    signal crc16_en : std_logic;
-    signal shift_en : std_logic_vector (7 downto 0);
-    signal mmc_dat_i : std_logic_vector (7 downto 0);
-    signal mmc_dat_o : std_logic_vector (7 downto 0);
-    signal txdata_i : bytearray;
-    signal rxdata_o : bytearray;
+    signal dat0_shiftreg : std_logic_vector (7 downto 0) <= (others => '1');
+    signal dat0_byte : std_logic_vector (7 downto 0);
     
 begin
 
+    dat_out_o(0) <= dat0_shiftreg(7);
+
+    -- 8bit shift register (DAT0)
+    process
+    begin
+        wait until rising_edge(clk) and shift_en='1'; and mmc_clk_rise='1';
+        
+        if bit_counter=7 then
+            bit_counter <= bit_counter - 1;
+                if dat_in_mode=̈́1' then
+                    dat0_shiftreg <= dat0_shiftreg (6 downto 0) & dat_in_i(0);
+                else
+                    dat0_shiftreg <= dat0_byte;
+                end if;
+        elsif bit_counter /= 0 then
+            bit_counter <= bit_counter - 1;
+            dat0_shiftreg <= dat0_shiftreg (6 downto 0) & dat_in_i(0);
+            
+        elsif bit_counter = 0 then
+            bit_counter <= 7;
+            dat0_shiftreg <= dat0_shiftreg (6 downto 0) & dat_in_i(0); 
+                       
+        end if;
+    end process;
+    
+    -- block control module
+    process
+    begin
+        wait until rising_edge(clk) and clk_en='1';
+        
+        
+        
+        
+        
+    end process;
+    
     
 
-    u_mmc_datlines : for i in 0 to 7 generate
-        u_mmc_datline : mmc_dataline
-            Port map ( 
-                clk => clk,
-                reset => reset,
-                clk_en => clk_en,
-                dat_dir => dat_dir,
-                load_shift => load_shift,
-                shift_en => shift_en(i),
-                crc16_clear => crc16_clear,
-                crc16_en => crc16_en,
-                txdata_i => txdata_i(i),
-                rxdata_o => rxdata_o(i),
-                mmc_dat_i => mmc_dat_i (i),
-                mmc_dat_o => mmc_dat_o (i));
-end generate;
+    mmc_dat_out_fifo : mmc_dat_fifo
+      PORT MAP (
+        clk => clk,
+        srst => reset,
+        din => data_fifo_out_i,
+        wr_en => data_fifo_out_wr_i,
+        rd_en => rd_en,
+        dout => dout,
+        full => data_fifo_out_full_o,
+        empty => empty
+      );
+      
+    mmc_dat_in_fifo : mmc_dat_fifo
+        PORT MAP (
+          clk => clk,
+          srst => reset,
+          din => din,
+          wr_en => wr_en,
+          rd_en => data_fifo_in_rd_i,
+          dout => data_fifo_in_o,
+          full => full,
+          empty => data_fifo_in_empty_o
+        );      
 
 end rtl;
+-
