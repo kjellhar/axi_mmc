@@ -77,7 +77,7 @@ architecture rtl of mmc_dat_if is
     
     signal shift_en : std_logic := '0';
     
-    signal dat0_shiftreg : std_logic_vector (7 downto 0) <= (others => '1');
+    signal dat0_shiftreg : std_logic_vector (7 downto 0) := (others => '1');
     signal dat0_byte : std_logic_vector (7 downto 0);
     
 begin
@@ -87,11 +87,11 @@ begin
     -- 8bit shift register (DAT0)
     process
     begin
-        wait until rising_edge(clk) and shift_en='1'; and mmc_clk_rise='1';
+        wait until rising_edge(clk) and shift_en='1' and mmc_clk_rise='1';
         
         if bit_counter=7 then
             bit_counter <= bit_counter - 1;
-                if dat_in_mode=̈́1' then
+                if dat_in_mode='1' then
                     dat0_shiftreg <= dat0_shiftreg (6 downto 0) & dat_in_i(0);
                 else
                     dat0_shiftreg <= dat0_byte;
@@ -145,4 +145,3 @@ begin
         );      
 
 end rtl;
--

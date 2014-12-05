@@ -8,6 +8,7 @@ set srcDir	./src
 set constrDir	./constr
 set scriptDir	./scripts
 set simDir	./sim
+set ipDir	./ip
 
 set vhdlDir	$srcDir/vhdl
 set veriDir	$srcDir/verilog
@@ -24,6 +25,15 @@ set_property -name {xsim.simulate.runtime} -value {0 ns} -objects [current_files
 # Add VHDL and verilog design files
 add_files [glob $vhdlDir/*.vhd]
 # add_files [glob $veriDir/*.v]
+
+# Add IP modules
+set re {[^\/]*$}
+foreach dirName [glob -nocomplain -type {d r} -path $ipDir/ *] {
+	regexp $re $dirName ipName
+	add_files $dirName/$ipName.xci
+}
+
+
 
 # Add constraints
 add_files -fileset constrs_1 [glob $constrDir/*.xdc]
