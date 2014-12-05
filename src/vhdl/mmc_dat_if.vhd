@@ -71,8 +71,23 @@ architecture rtl of mmc_dat_if is
             empty : OUT STD_LOGIC
         );
     END COMPONENT;
+    
+    type block_state_t is (
+        IDLE,
+        RX_START_BIT,
+        RX_DATA_BLOCK,
+        RX_CRC1,
+        RX_CRC2,
+        TX_START_BIT,
+        TX_DATA_BLOCK,
+        TX_CRC1,
+        TX_CRC2
+    );
+    
+    signal block_state : block_state_t := IDLE;
+    signal next_block_state : block_state_t;
 
-    signal byte_counter : integer range 0 to 513 := 0;
+    signal byte_counter : integer range 0 to 511 := 0;
     signal bit_counter : integer range 0 to 7 := 7;
     
     signal shift_en : std_logic := '0';
@@ -83,6 +98,7 @@ architecture rtl of mmc_dat_if is
 begin
 
     dat_out_o(0) <= dat0_shiftreg(7);
+    dat_out_o(7 downto 1) <= "1111111";
 
     -- 8bit shift register (DAT0)
     process
@@ -112,11 +128,63 @@ begin
     begin
         wait until rising_edge(clk) and clk_en='1';
         
+        if reset='1' then
+            block_state <= IDLE;
         
-        
-        
-        
+        else
+            block_state <= next_block_state;
+            
+        end if;
     end process;
+    
+    process
+    begin
+        next_block_state <= block_state;
+        
+        case block_state is
+            when IDLE =>
+                if trigger_block_i='1' then
+                    if dat_dir_i='1' then
+                        next_block_state <= TX_START_BIT;
+                    else
+                        next_block_state <= RX_START_BIT;
+                    end if;
+                end if;
+                
+            when RX_START_BIT =>
+                if dat_in_i(0)='0' then
+                    next_block_state <= RX_DATA_BLOCK;
+                end if;
+                
+            when RX_DATA_BLOCK =>
+                if byte_counter=511 then
+                    next_block_state <= RX_CRC1;
+                end if;
+            
+            when RX_CRC1 =>
+                next_block_state <= RX_CRC2;
+                
+            when RX_CRC2 =>
+                next_block_state <= IDLE;
+                
+            when TX_START_BIT =>
+                next_block_state <= TX_DATA_BLOCK;
+                
+            when TX_DATA_BLOCK =>
+                if byte_counter=511 then
+                    next_block_state <= TX_CRC1;
+                end if;
+            
+            when TX_CRC1 =>
+                next_block_state <= TX_CRC2;
+                
+            when TX_CRC2 =>
+                next_block_state <= IDLE;
+            when default =>
+            
+        end case;
+    end process;
+    
     
     
 
