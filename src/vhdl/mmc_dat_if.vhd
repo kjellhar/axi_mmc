@@ -34,11 +34,11 @@ use IEEE.STD_LOGIC_1164.ALL;
 entity mmc_dat_if is
     Port ( clk : in std_logic;
            clk_en : in std_logic;
-           mmc_clk_rise : in std_logic;
            reset : in std_logic;
            
-           trigger_block_i : in std_logic;
-           block_finished_o : out std_logic;
+           receive_dat_trigger_i : in std_logic;
+           transmit_dat_trigger_i : in std_logic;
+           dat_block_finished_o : out std_logic;
            
            bus_width : in std_logic_vector (1 downto 0);
            
@@ -51,9 +51,7 @@ entity mmc_dat_if is
            data_fifo_in_empty_o : out std_logic;
            
            dat_out_o : out std_logic_vector (7 downto 0);
-           dat_in_i : in std_logic_vector (7 downto 0);
-           dat_dir_i : in std_logic_vector
-           
+           dat_in_i : in std_logic_vector (7 downto 0)
            );
 end mmc_dat_if;
 
@@ -71,6 +69,18 @@ architecture rtl of mmc_dat_if is
             empty : OUT STD_LOGIC
         );
     END COMPONENT;
+    
+    component mmc_crc16 is
+        Port ( clk : in std_logic;
+               clk_en : in std_logic;
+               reset : in std_logic;
+               enable : in std_logic;
+               
+               serial_in : in std_logic;
+               crc16_out : out std_logic_vector (15 downto 0)
+               );
+    end component;
+    
     
     type block_state_t is (
         IDLE,
@@ -95,6 +105,7 @@ architecture rtl of mmc_dat_if is
     signal dat0_shiftreg : std_logic_vector (7 downto 0) := (others => '1');
     signal dat0_byte : std_logic_vector (7 downto 0);
     
+    
 begin
 
     dat_out_o(0) <= dat0_shiftreg(7);
@@ -103,11 +114,11 @@ begin
     -- 8bit shift register (DAT0)
     process
     begin
-        wait until rising_edge(clk) and shift_en='1' and mmc_clk_rise='1';
+        wait until rising_edge(clk) and shift_en='1';
         
         if bit_counter=7 then
             bit_counter <= bit_counter - 1;
-                if dat_in_mode='1' then
+                if block_state=RX_DATA_BLOCK then
                     dat0_shiftreg <= dat0_shiftreg (6 downto 0) & dat_in_i(0);
                 else
                     dat0_shiftreg <= dat0_byte;
@@ -137,18 +148,16 @@ begin
         end if;
     end process;
     
-    process
+    process (block_state, transmit_dat_trigger_i, receive_dat_trigger_i, dat_in_i, byte_counter)
     begin
         next_block_state <= block_state;
         
         case block_state is
             when IDLE =>
-                if trigger_block_i='1' then
-                    if dat_dir_i='1' then
-                        next_block_state <= TX_START_BIT;
-                    else
-                        next_block_state <= RX_START_BIT;
-                    end if;
+                if transmit_dat_trigger_i='1' then
+                    next_block_state <= TX_START_BIT;
+                elsif receive_dat_trigger_i='1' then
+                    next_block_state <= RX_START_BIT;
                 end if;
                 
             when RX_START_BIT =>
@@ -180,7 +189,8 @@ begin
                 
             when TX_CRC2 =>
                 next_block_state <= IDLE;
-            when default =>
+                
+            when others =>
             
         end case;
     end process;
@@ -211,5 +221,17 @@ begin
           full => full,
           empty => data_fifo_in_empty_o
         );      
+
+--    u_mmc_crc16 : mmc_crc16
+--        Port map ( 
+--            clk => clk,
+--            clk_en => clk_en,
+--            reset => crc16_clear,
+--            enable => crc16_en,
+            
+--            serial_in => crc16_serial_in,
+--            crc16_out => crc16
+--            );
+    
 
 end rtl;

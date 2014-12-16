@@ -11,7 +11,7 @@
 -- Description: 
 --
 --      The MMC core is designed so it should be quite simple to
---      adapt it to any bus sytem. It uses a range of registers 
+--      adapt it to any bus system. It uses a range of registers 
 --      for interfacing. A bus wrapper must take care of address
 --      decoding and bus protocol. The internal control signals are
 --      very simple. 
@@ -23,6 +23,7 @@
 --
 --          config_reg (RW):
 --              [31:24] - MMC clock prescaler:  f_mmc = f_in/(2*(1+pre))
+--              [2:1]   - Bus width:  0=1bit, 1=4bit, 2=8bit, 3=Illegal
 --              [0]     - Module enable  
 --
 --
@@ -61,9 +62,9 @@ use IEEE.NUMERIC_STD.ALL;
 entity mmc_core_top is
     Port ( clk : in std_logic;
            reset : in std_logic;
-           irq : out std_logic;
-           execute : in std_logic;
-           busy : out std_logic;
+           irq_o : out std_logic;
+           execute_i : in std_logic;
+           busy_o : out std_logic;
            
            status_reg_o : out std_logic_vector (31 downto 0);
            
@@ -79,13 +80,18 @@ entity mmc_core_top is
            cmd_arg_reg_o : out std_logic_vector (31 downto 0);
            cmd_arg_reg_wr : in std_logic;
            
-           respons_fifo_o : out std_logic_vector (31 downto 0);
-           respons_fifo_pull : in std_logic;
-           respons_fifo_empty : out std_logic;
-           
+           respons_reg0_o : out std_logic_vector (31 downto 0);
+           respons_reg1_o : out std_logic_vector (31 downto 0);
+           respons_reg2_o : out std_logic_vector (31 downto 0);
+           respons_reg3_o : out std_logic_vector (31 downto 0);
+
            rdata_fifo_o : out std_logic_vector (31 downto 0 );
-           rdata_fifo_pull : in std_logic;
-           rdata_fifo_empty : out std_logic;
+           rdata_fifo_pull_i : in std_logic;
+           rdata_fifo_empty_o : out std_logic;
+           
+           wdata_fifo_o : out std_logic_vector (31 downto 0 );
+           wdata_fifo_push_i : in std_logic;
+           wdata_fifo_full_o : out std_logic;           
            
            
            -- MCC signals
@@ -99,8 +105,8 @@ entity mmc_core_top is
            mmc_cpresent_i : in std_logic;
            mmc_pwr_en_o : out std_logic;
            -- MMC pin control signals
-           mmc_cmd_dir : out std_logic;
-           mmc_dat_dir : out std_logic
+           mmc_cmd_dir_o : out std_logic;
+           mmc_dat_dir_o : out std_logic
                      
            );
 end mmc_core_top;
@@ -129,6 +135,31 @@ architecture rtl of mmc_core_top is
                mmc_crc7_out_o : out std_logic_vector (6 downto 0)
                );
     end component;
+    
+    component mmc_dat_if is
+        Port ( clk : in std_logic;
+               clk_en : in std_logic;
+               reset : in std_logic;
+               
+               receive_dat_trigger_i : in std_logic;
+               transmit_dat_trigger_i : in std_logic;
+               dat_block_finished_o : out std_logic;
+               
+               bus_width : in std_logic_vector (1 downto 0);
+               
+               data_fifo_out_i : in std_logic_vector (31 downto 0);
+               data_fifo_out_wr_i : in std_logic;
+               data_fifo_out_full_o : out std_logic;
+               
+               data_fifo_in_o : out std_logic_vector (31 downto 0);
+               data_fifo_in_rd_i : in std_logic;
+               data_fifo_in_empty_o : out std_logic;
+               
+               dat_out_o : out std_logic_vector (7 downto 0);
+               dat_in_i : in std_logic_vector (7 downto 0)              
+               );
+    end component;    
+    
     
     component mmc_clk_manager is
         Port ( clk : in std_logic;
@@ -174,8 +205,11 @@ architecture rtl of mmc_core_top is
     signal module_enable : std_logic;
     signal mmc_crc7_out : std_logic_vector (6 downto 0);
     signal crc7_calc_en : std_logic;
-
-
+    signal receive_dat_trigger : std_logic;
+    signal transmit_dat_trigger : std_logic;
+    signal dat_block_finished : std_logic;
+    signal bus_width : std_logic_vector (1 downto 0);
+    
     -- Register
     signal status_reg : std_logic_vector (31 downto 0) := (others => '0');
     signal config_reg : std_logic_vector (31 downto 0) := (others => '0');
@@ -202,12 +236,15 @@ begin
     mmc_clk_o <= mmc_clk;
 
     -- Connect config register to control signals
+    prescaler <= config_reg (31 downto 24);
+    bus_width <= config_reg (2 downto 1);
+    module_enable <= config_reg(0);    
+    
+    -- Connecto operation reg to internal signals
     cmd_index <= operation_reg (5 downto 0);
     response <= operation_reg (8 downto 6);
     crc7_preset <= operation_reg (22 downto 16);
-    prescaler <= config_reg (31 downto 24);
-    module_enable <= config_reg(0);
-    crc7_calc_en <= config_reg(9);
+    crc7_calc_en <= operation_reg(9);
     
     cmd_shift_outval <= "01" & cmd_index & cmd_arg_reg & crc7_preset & '1';
     
@@ -264,7 +301,7 @@ begin
                 mmc_clk_en <= '0';
         
             when IDLE =>
-                if execute='1' then
+                if execute_i='1' then
                     nextstate <= INIT_SEND_CMD;
                 end if;
                 
@@ -326,24 +363,37 @@ begin
         Port map ( 
             clk => clk,
             clk_en => mmc_clk_rise,
-            reset => reset,
-            
+            reset => reset,            
             mmc_cmd_i => mmc_cmd_i,
-            mmc_cmd_o => mmc_cmd_o,
-            
+            mmc_cmd_o => mmc_cmd_o,            
             send_cmd_trigger_i => send_cmd_trigger,
             receive_cmd_trigger_i => receive_cmd_trigger,
             send_cmd_busy_o => send_cmd_busy,
-            receive_cmd_busy_o => receive_cmd_busy,
-            
-            crc7_calc_en_i => crc7_calc_en,
-            
-            response_i => response,
-            
+            receive_cmd_busy_o => receive_cmd_busy,            
+            crc7_calc_en_i => crc7_calc_en,            
+            response_i => response,            
             cmd_shift_outval_i => cmd_shift_outval,
             cmd_shift_inval_o => cmd_shift_in,
             mmc_crc7_out_o => mmc_crc7_out        
             );
 
-
+    u_mmc_dat_if : mmc_dat_if 
+        Port map ( 
+            clk => clk,
+            clk_en => mmc_clk_rise,
+            reset => reset,
+            receive_dat_trigger_i => receive_dat_trigger,
+            transmit_dat_trigger_i => transmit_dat_trigger,
+            dat_block_finished_o => dat_block_finished,
+            bus_width => bus_width,
+            data_fifo_out_i => wdata_fifo_o,
+            data_fifo_out_wr_i => wdata_fifo_push_i,
+            data_fifo_out_full_o => wdata_fifo_full_o,
+            data_fifo_in_o => rdata_fifo_o,
+            data_fifo_in_rd_i => rdata_fifo_pull_i,
+            data_fifo_in_empty_o => rdata_fifo_empty_o,
+            dat_out_o => mmc_dat_o,
+            dat_in_i => mmc_dat_i            
+            );
 end rtl;
+   
