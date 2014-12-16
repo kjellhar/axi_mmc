@@ -4,7 +4,7 @@
 -- 
 -- Create Date: 11/29/2014 09:07:43 PM
 -- Design Name: 
--- Module Name: basic_cmd_test - testbench
+-- Module Name: dat_if_standalone_1bit - testbench
 -- Project Name: 
 -- Target Devices: 
 -- Tool Versions: 
@@ -31,11 +31,11 @@ use IEEE.STD_LOGIC_1164.ALL;
 --library UNISIM;
 --use UNISIM.VComponents.all;
 
-entity basic_cmd_test is
+entity dat_if_standalone_1bit is
 --  Port ( );
-end basic_cmd_test;
+end dat_if_standalone_1bit;
 
-architecture testbench of basic_cmd_test is
+architecture testbench of dat_if_standalone_1bit is
 
     constant clk100M_per : time := 10 ns;
 
