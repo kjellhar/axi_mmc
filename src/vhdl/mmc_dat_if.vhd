@@ -40,7 +40,7 @@ entity mmc_dat_if is
            transmit_dat_trigger_i : in std_logic;
            dat_block_finished_o : out std_logic;
            
-           bus_width : in std_logic_vector (1 downto 0);
+           bus_width_i : in std_logic_vector (1 downto 0);
            
            data_fifo_out_i : in std_logic_vector (31 downto 0);
            data_fifo_out_wr_i : in std_logic;
@@ -66,7 +66,8 @@ architecture rtl of mmc_dat_if is
             rd_en : IN STD_LOGIC;
             dout : OUT STD_LOGIC_VECTOR(31 DOWNTO 0);
             full : OUT STD_LOGIC;
-            empty : OUT STD_LOGIC
+            empty : OUT STD_LOGIC;
+            data_count : OUT STD_LOGIC_VECTOR(9 DOWNTO 0)
         );
     END COMPONENT;
     
@@ -98,38 +99,71 @@ architecture rtl of mmc_dat_if is
     signal next_block_state : block_state_t;
 
     signal byte_counter : integer range 0 to 511 := 0;
-    signal bit_counter : integer range 0 to 7 := 7;
+    signal bit_counter : integer range 0 to 31 := 31;
     
     signal shift_en : std_logic := '0';
     
-    signal dat0_shiftreg : std_logic_vector (7 downto 0) := (others => '1');
-    signal dat0_byte : std_logic_vector (7 downto 0);
+    signal data_fifo_out_rd_en : std_logic := '0';
+    signal data_fifo_out_dout : std_logic_vector (31 downto 0);
+    signal data_fifo_out_empty : std_logic;
+    signal data_fifo_out_count : std_logic_vector (9 downto 0);
+    signal data_fifo_in_din : std_logic_vector (31 downto 0);
+    signal data_fifo_in_wr_en : std_logic;
+    signal data_fifo_out_full : std_logic;
+    signal data_fifo_in_count : std_logic_vector (9 downto 0);
+    
+    signal crc16_clear : std_logic;
+    signal crc16_en : std_logic;
+    signal crc16_serial_in : std_logic;
+    signal crc16 : std_logic_vector (15 downto 0);
+    
+    signal dat0_shiftreg : std_logic_vector (31 downto 0) := (others => '1');
+    signal dat0_word : std_logic_vector (31 downto 0);
     
     
 begin
 
-    dat_out_o(0) <= dat0_shiftreg(7);
+    dat_out_o(0) <= dat0_shiftreg(31);
     dat_out_o(7 downto 1) <= "1111111";
+    
+    dat0_word <= data_fifo_out_dout (7 downto 0) &
+                 data_fifo_out_dout (15 downto 8) &
+                 data_fifo_out_dout (23 downto 16) &
+                 data_fifo_out_dout (31 downto 24);
+
+    data_fifo_in_din <=  dat0_shiftreg (7 downto 1) & dat_in_i(0) &
+                         dat0_shiftreg (15 downto 8) &
+                         dat0_shiftreg (23 downto 16) &
+                         dat0_shiftreg (31 downto 24); 
+    
 
     -- 8bit shift register (DAT0)
     process
     begin
         wait until rising_edge(clk) and shift_en='1';
         
-        if bit_counter=7 then
+        data_fifo_out_rd_en <= '0';
+        data_fifo_in_wr_en <= '0';
+        
+        if bit_counter=31 then
             bit_counter <= bit_counter - 1;
                 if block_state=RX_DATA_BLOCK then
-                    dat0_shiftreg <= dat0_shiftreg (6 downto 0) & dat_in_i(0);
+                    dat0_shiftreg <= dat0_shiftreg (30 downto 0) & dat_in_i(0);
                 else
-                    dat0_shiftreg <= dat0_byte;
+                    dat0_shiftreg <= dat0_word;
+                    data_fifo_out_rd_en <= '1';
                 end if;
         elsif bit_counter /= 0 then
             bit_counter <= bit_counter - 1;
-            dat0_shiftreg <= dat0_shiftreg (6 downto 0) & dat_in_i(0);
+            dat0_shiftreg <= dat0_shiftreg (30 downto 0) & dat_in_i(0);
             
         elsif bit_counter = 0 then
-            bit_counter <= 7;
-            dat0_shiftreg <= dat0_shiftreg (6 downto 0) & dat_in_i(0); 
+            bit_counter <= 31;
+            dat0_shiftreg <= dat0_shiftreg (30 downto 0) & dat_in_i(0); 
+            
+            if block_state=RX_DATA_BLOCK then
+                data_fifo_in_wr_en <= '1';
+            end if;
                        
         end if;
     end process;
@@ -204,34 +238,36 @@ begin
         srst => reset,
         din => data_fifo_out_i,
         wr_en => data_fifo_out_wr_i,
-        rd_en => rd_en,
-        dout => dout,
+        rd_en => data_fifo_out_rd_en,
+        dout => data_fifo_out_dout,
         full => data_fifo_out_full_o,
-        empty => empty
+        empty => data_fifo_out_empty,
+        data_count => data_fifo_out_count
       );
       
     mmc_dat_in_fifo : mmc_dat_fifo
         PORT MAP (
           clk => clk,
           srst => reset,
-          din => din,
-          wr_en => wr_en,
+          din => data_fifo_in_din,
+          wr_en => data_fifo_in_wr_en,
           rd_en => data_fifo_in_rd_i,
           dout => data_fifo_in_o,
-          full => full,
-          empty => data_fifo_in_empty_o
+          full => data_fifo_out_full,
+          empty => data_fifo_in_empty_o,
+          data_count => data_fifo_in_count
         );      
 
---    u_mmc_crc16 : mmc_crc16
---        Port map ( 
---            clk => clk,
---            clk_en => clk_en,
---            reset => crc16_clear,
---            enable => crc16_en,
+    u_mmc_crc16 : mmc_crc16
+        Port map ( 
+            clk => clk,
+            clk_en => clk_en,
+            reset => crc16_clear,
+            enable => crc16_en,
             
---            serial_in => crc16_serial_in,
---            crc16_out => crc16
---            );
+            serial_in => crc16_serial_in,
+            crc16_out => crc16
+            );
     
 
 end rtl;

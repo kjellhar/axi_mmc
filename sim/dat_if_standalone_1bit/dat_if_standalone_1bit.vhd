@@ -39,50 +39,27 @@ architecture testbench of dat_if_standalone_1bit is
 
     constant clk100M_per : time := 10 ns;
 
-    component mmc_core_top is
+    component mmc_dat_if is
         Port ( clk : in std_logic;
+               clk_en : in std_logic;
                reset : in std_logic;
-               irq : out std_logic;
-               execute : in std_logic;
-               busy : out std_logic;
                
-               status_reg_o : out std_logic_vector (31 downto 0);
+               receive_dat_trigger_i : in std_logic;
+               transmit_dat_trigger_i : in std_logic;
+               dat_block_finished_o : out std_logic;
                
-               config_reg_i : in std_logic_vector (31 downto 0);
-               config_reg_o : out std_logic_vector (31 downto 0);
-               config_reg_wr : in std_logic;
-    
-               operation_reg_i : in std_logic_vector (31 downto 0);
-               operation_reg_o : out std_logic_vector (31 downto 0);
-               operation_reg_wr : in std_logic;
+               bus_width_i : in std_logic_vector (1 downto 0);
                
-               cmd_arg_reg_i : in std_logic_vector (31 downto 0);
-               cmd_arg_reg_o : out std_logic_vector (31 downto 0);
-               cmd_arg_reg_wr : in std_logic;
+               data_fifo_out_i : in std_logic_vector (31 downto 0);
+               data_fifo_out_wr_i : in std_logic;
+               data_fifo_out_full_o : out std_logic;
                
-               respons_fifo_o : out std_logic_vector (31 downto 0);
-               respons_fifo_pull : in std_logic;
-               respons_fifo_empty : out std_logic;
+               data_fifo_in_o : out std_logic_vector (31 downto 0);
+               data_fifo_in_rd_i : in std_logic;
+               data_fifo_in_empty_o : out std_logic;
                
-               rdata_fifo_o : out std_logic_vector (31 downto 0 );
-               rdata_fifo_pull : in std_logic;
-               rdata_fifo_empty : out std_logic;
-               
-               
-               -- MCC signals
-               mmc_clk_o : out std_logic;
-               mmc_rst_o : out std_logic;
-               mmc_cmd_i : in std_logic;
-               mmc_cmd_o : out std_logic;
-               mmc_dat_i : in std_logic_vector (7 downto 0);
-               mmc_dat_o : out std_logic_vector (7 downto 0);
-               -- Auxillary MMC signals
-               mmc_cpresent_i : in std_logic;
-               mmc_pwr_en_o : out std_logic;
-               -- MMC pin control signals
-               mmc_cmd_dir : out std_logic;
-               mmc_dat_dir : out std_logic
-                         
+               dat_out_o : out std_logic_vector (7 downto 0);
+               dat_in_i : in std_logic_vector (7 downto 0)
                );
     end component;
 
@@ -90,65 +67,45 @@ architecture testbench of dat_if_standalone_1bit is
     signal test_en : std_logic := '1';
     signal clk100M : std_logic := '0';
     signal reset : std_logic := '1';
-    signal execute : std_logic := '0';
-    signal status_reg_o : std_logic_vector (31 downto 0);
-    signal config_reg_o : std_logic_vector (31 downto 0);
-    signal config_reg_i : std_logic_vector (31 downto 0) := (others => '0');    
-    signal config_reg_wr : std_logic := '0';
-    signal operation_reg_o : std_logic_vector (31 downto 0);
-    signal operation_reg_i : std_logic_vector (31 downto 0) := (others => '0');    
-    signal operation_reg_wr : std_logic := '0';
-    signal cmd_arg_reg_o : std_logic_vector (31 downto 0);
-    signal cmd_arg_reg_i : std_logic_vector (31 downto 0) := (others => '0');    
-    signal cmd_arg_reg_wr : std_logic := '0';    
     
-    signal mmc_clk_o : std_logic;
-    signal mmc_cmd_o : std_logic;
-    signal mmc_cmd_dir : std_logic;   
+    signal clk_en : std_logic := '0';
     
-    signal response : std_logic_vector (135 downto 0) := (others => '1'); 
+    signal receive_dat_trigger : std_logic := '0';
+    signal transmit_dat_trigger : std_logic := '0';
+    signal dat_block_finished : std_logic;
+    signal bus_width : std_logic_vector (1 downto 0) := "00";
+    signal data_fifo_out : std_logic_vector (31 downto 0);
+    signal data_fifo_out_wr : std_logic := '0';
+    signal data_fifo_out_full : std_logic;
+    signal data_fifo_in : std_logic_vector (31 downto 0) := X"00000000";
+    signal data_fifo_in_rd : std_logic := '0';
+    signal data_fifo_in_empty : std_logic;
+    signal dat_out : std_logic_vector (7 downto 0);
+    signal dat_in : std_logic_vector (7 downto 0) := X"00";
+
     
 begin
 
-    -- DUT instantiation
-    u_dut : mmc_core_top 
+
+    u_dut : mmc_dat_if
         Port map ( 
-            clk => clk100M,
+            clk => clk,
+            clk_en => clk_en,
             reset => reset,
-            --irq => ,
-            execute => execute,
-            --busy => ,            
-            status_reg_o => status_reg_o,
-            config_reg_i => config_reg_i,
-            config_reg_o => config_reg_o,
-            config_reg_wr => config_reg_wr,
-            operation_reg_i => operation_reg_i,
-            operation_reg_o => operation_reg_o,
-            operation_reg_wr => operation_reg_wr,
-            cmd_arg_reg_i => cmd_arg_reg_i,
-            cmd_arg_reg_o => cmd_arg_reg_o,
-            cmd_arg_reg_wr => cmd_arg_reg_wr,
-            --respons_fifo_o => ,
-            respons_fifo_pull => '0',
-            --respons_fifo_empty => ,
-            --rdata_fifo_o => ,
-            rdata_fifo_pull => '0',
-            --rdata_fifo_empty => ,
-            -- MCC signals
-            mmc_clk_o => mmc_clk_o,
-            --mmc_rst_o => ,
-            mmc_cmd_i => response(135),
-            mmc_cmd_o => mmc_cmd_o,
-            mmc_dat_i => "00000000",
-            --mmc_dat_o => ,
-            -- Auxillary MMC signals
-            mmc_cpresent_i => '1',
-            --mmc_pwr_en_o => ,
-            -- MMC pin control signals
-            mmc_cmd_dir => mmc_cmd_dir
-            --mmc_dat_dir =>                      
+            receive_dat_trigger_i => receive_dat_trigger,
+            transmit_dat_trigger_i => transmit_dat_trigger,
+            dat_block_finished_o => dat_block_finished,
+            bus_width_i => bus_width,
+            data_fifo_out_i => data_fifo_out,
+            data_fifo_out_wr_i => data_fifo_out_wr,
+            data_fifo_out_full_o => data_fifo_out_full,
+            data_fifo_in_o => data_fifo_in,
+            data_fifo_in_rd_i => data_fifo_in_rd,
+            data_fifo_in_empty_o => data_fifo_in_empty,
+            dat_out_o => dat_out,
+            dat_in_i => dat_in            
             );
-  
+
 
 
     -- Clock generator
@@ -174,50 +131,7 @@ begin
         wait for 10*clk100M_per;
         wait until rising_edge(clk100M);
         
-        
-        config_reg_i <= X"02" & X"000201";
-        wait until rising_edge(clk100M);
-        config_reg_wr <= '1';
-        wait until rising_edge(clk100M);
-        config_reg_wr <= '0';
-        config_reg_i <= (others => '0');
-        
-        operation_reg_i <= X"00" & '0' & "1010011" & "000" & "0000" & "011" & "010011";
-        wait until rising_edge(clk100M);
-        operation_reg_wr <= '1';
-        wait until rising_edge(clk100M);
-        operation_reg_wr <= '0';
-        operation_reg_i <= (others => '0');        
  
-        cmd_arg_reg_i <= X"01234567";
-        wait until rising_edge(clk100M);
-        cmd_arg_reg_wr <= '1';
-        wait until rising_edge(clk100M);
-        cmd_arg_reg_wr <= '0';
-        cmd_arg_reg_i <= (others => '0');       
-        
-        wait for 10*clk100M_per;
-        wait until rising_edge(clk100M);
-        execute <= '1';
-        wait until rising_edge(clk100M);
-        execute <= '0';
-        
-        wait until falling_edge(mmc_cmd_o);
-        
-        for i in 0 to 47 loop
-            wait until rising_edge(mmc_clk_o);
-        end loop;
-        
-        wait until rising_edge(mmc_clk_o);
-        wait until rising_edge(mmc_clk_o);
-        wait until rising_edge(mmc_clk_o);
-        
-        response <= X"73C3C3C3C3C3C3C3C3C3C3C3C3C3C3C3C1";
-        
-        for i in 0 to 135 loop
-            wait until rising_edge(mmc_clk_o);
-            response <= response (134 downto 0) & '1';
-        end loop;
         
         wait for 200 ns;
         test_en <= '0';

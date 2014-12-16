@@ -145,7 +145,7 @@ architecture rtl of mmc_core_top is
                transmit_dat_trigger_i : in std_logic;
                dat_block_finished_o : out std_logic;
                
-               bus_width : in std_logic_vector (1 downto 0);
+               bus_width_i : in std_logic_vector (1 downto 0);
                
                data_fifo_out_i : in std_logic_vector (31 downto 0);
                data_fifo_out_wr_i : in std_logic;
@@ -385,7 +385,7 @@ begin
             receive_dat_trigger_i => receive_dat_trigger,
             transmit_dat_trigger_i => transmit_dat_trigger,
             dat_block_finished_o => dat_block_finished,
-            bus_width => bus_width,
+            bus_width_i => bus_width,
             data_fifo_out_i => wdata_fifo_o,
             data_fifo_out_wr_i => wdata_fifo_push_i,
             data_fifo_out_full_o => wdata_fifo_full_o,
